@@ -1,7 +1,11 @@
 type peano = Z | S of peano
+type 'a list = Nil | Cons of 'a * 'a list
 
 val peano_of_int: int -> peano
 val int_of_peano: peano -> int
+val string_of_list: peano list -> string
+val string_of_list_int: int list -> string
+val list_length: 'a list -> int
 
 val inc: peano -> peano
 val add: peano -> peano -> peano
