@@ -2,11 +2,9 @@ type peano = Z | S of peano;;
 type lambda = Var of string | Abs of string * lambda | App of lambda * lambda;;
 type 'a list = Nil | Cons of 'a * 'a list;;
 
-let peano_of_int x = failwith "Not implemented";;
-
 let rec int_of_peano p = match p with
     Z -> 0
-  | S x -> 1 + int_of_peano x;;
+  	| S x -> 1 + int_of_peano x;;
 
 let rec peano_of_int p = match p with
 	0 -> Z
@@ -73,11 +71,55 @@ let rec merge_sort x = match x with
 	Nil -> Nil
 	| Cons (a, Nil) -> x
 	| _ -> 
-		let two_parts = get_two_parts x in
-		let first = match two_parts with (a, b) -> a in
-		let second = match two_parts with (a, b) -> b in
-			merge (merge_sort first) (merge_sort second) Nil;;
+		let (a, b) = get_two_parts x in
+			merge (merge_sort a) (merge_sort b) Nil;;
 
-                     
-let string_of_lambda x = failwith "Not implemented";;
-let lambda_of_string x = failwith "Not implemented";;
+let rec read_abs x iter res = match x.[iter] with
+	'.' -> (res, iter + 1)
+	| _ -> read_abs x (iter + 1) (res ^ Char.escaped x.[iter]);;
+
+let rec read_var x iter res = match x.[iter] with
+	' ' | ')' | '#' | '(' -> (res, iter)
+	| _ -> read_var x (iter + 1) (res ^ Char.escaped x.[iter]);;
+
+let rec skip_all_spaces x iter = match x.[iter] with
+	' ' -> skip_all_spaces x (iter + 1)
+	| _ -> iter;; 
+
+type something = Nothing | Lambda of lambda;;
+
+let rec lambda_of_string_another x iter prev = match x.[iter] with
+	'\\' -> 
+		let (result, iter) = read_abs x (iter + 1) "" in
+			let iter = skip_all_spaces x iter in
+				let (toAdd, iter) = lambda_of_string_another x iter Nothing in
+					(Abs (result, toAdd), iter)
+	| '(' -> 
+		let iter = skip_all_spaces x (iter + 1) in
+			let (res, iter) = lambda_of_string_another x iter Nothing in
+				rec_or_ret x (iter + 1) res prev
+	| _ -> 
+		let (result, iter) = read_var x iter "" in
+			rec_or_ret x iter (Var result) prev
+and rec_or_ret x iter result prev =
+	let result = match prev with
+		Nothing -> result
+		| Lambda a -> App(a, result) in
+			let iter = skip_all_spaces x iter in
+				match x.[iter] with 
+					')' | '#' -> (result, iter)
+					| _ -> lambda_of_string_another x iter (Lambda result);;
+
+let lambda_of_string x = 
+	let (result, last) = lambda_of_string_another (x ^ "#") 0 Nothing in
+		result;;
+
+let rec string_of_lambda x = match x with 
+	Var a -> a
+	| App (a, b) -> "("  ^ (string_of_lambda a) ^ " " ^ (string_of_lambda b) ^ ")"
+	| Abs (a, b) -> "\\" ^ a ^ "." ^ (string_of_lambda b);;
+
+let rec string_of_lambda1 x = match x with 
+	Var a -> a
+	| App (a, b) -> "App(" ^ (string_of_lambda1 a) ^ ", " ^ (string_of_lambda1 b) ^ ")"
+	| Abs (a, b) -> "Abs(" ^ a ^  ", " ^ (string_of_lambda1 b) ^ ")";;
