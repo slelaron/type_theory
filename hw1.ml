@@ -38,41 +38,41 @@ let rec power x y = match y with
 	| S z -> mul (power x z) x;;
                      
 let rec reverse x y = match x with
-	Nil -> y
-	| Cons (a, b) -> reverse b (Cons (a, y));;
+	[] -> y
+	| a :: b -> reverse b (a :: y);;
 
 let rec string_of_list x = match x with 
-	Nil -> "\n"
-	| Cons (a, b) -> string_of_int (int_of_peano a) ^ " " ^ (string_of_list b);;
+	[] -> "\n"
+	| a :: b -> string_of_int (int_of_peano a) ^ " " ^ (string_of_list b);;
 
 let rec string_of_list_int x = match x with
-	Nil -> "\n"
-	| Cons (a, b) -> string_of_int (a) ^ " " ^ (string_of_list_int b);;
+	[] -> "\n"
+	| a :: b -> string_of_int (a) ^ " " ^ (string_of_list_int b);;
 
-let rev x = reverse x Nil;;
+let rev x = reverse x [];;
 
 let rec list_length x = match x with
-	Nil -> 0
-	| Cons (a, b) -> (list_length b) + 1;;
+	[] -> 0
+	| a :: b -> (list_length b) + 1;;
 
 let rec divide_in_the_middle lst another cnt size = match lst with
-	Cons (a, b) -> if cnt < size / 2 then divide_in_the_middle b (Cons (a, another)) (cnt + 1) size else ((rev another), lst)
-	| Nil -> (Nil, Nil)
+	a :: b -> if cnt < size / 2 then divide_in_the_middle b (a :: another) (cnt + 1) size else ((rev another), lst)
+	| [] -> ([], [])
 
-let get_two_parts lst = divide_in_the_middle lst Nil 0 (list_length lst);;
+let get_two_parts lst = divide_in_the_middle lst [] 0 (list_length lst);;
 
 let rec merge a b comp result = match a, b with
-	Nil, Nil -> (rev result)
-	| Nil, Cons (c, d) -> merge Nil d comp (Cons (c, result))
-	| Cons (c, d), Nil -> merge d Nil comp (Cons (c, result))
-	| Cons (la, lb), Cons (ra, rb) -> if (comp la ra) then merge lb b comp (Cons (la, result)) else merge a rb comp (Cons (ra, result));;
+	[], [] -> (rev result)
+	| [], c :: d -> merge [] d comp (c :: result)
+	| c :: d, [] -> merge d [] comp (c :: result)
+	| la :: lb, ra :: rb -> if (comp la ra) then merge lb b comp (la :: result) else merge a rb comp (ra :: result);;
 
 let rec merge_sort_with_comp x comp = match x with
-	Nil -> Nil
-	| Cons (a, Nil) -> x
+	[] -> []
+	| a :: [] -> x
 	| _ -> 
 		let (a, b) = get_two_parts x in
-			merge (merge_sort_with_comp a comp) (merge_sort_with_comp b comp) comp Nil;;
+			merge (merge_sort_with_comp a comp) (merge_sort_with_comp b comp) comp [];;
 
 let merge_sort x = merge_sort_with_comp x (<);;
 
@@ -127,25 +127,25 @@ let rec string_of_lambda1 x = match x with
 	| Abs (a, b) -> "Abs(" ^ a ^  ", " ^ (string_of_lambda1 b) ^ ")";;
 
 let rec filter pred lst = match lst with
-	Nil -> Nil
-	| Cons (a, left) -> match (pred a) with
-			true -> Cons (a, (filter pred left))
+	[] -> []
+	| a :: left -> match (pred a) with
+			true -> a :: (filter pred left)
 			| _ -> filter pred left;;
 
 let rec concat a b = match a with
-	Nil -> b
-	| Cons (q, w) -> Cons (q, (concat w b));;
+	[] -> b
+	| q :: w -> q :: (concat w b);;
 
 let rec free_vars x = match x with 
-	Var a -> Cons (a, Nil)
+	Var a -> [a]
 	| App (a, b) -> (concat (free_vars a) (free_vars b))
 	| Abs (a, b) -> 
 		let predicate character = not (a = character) in
 				filter predicate (free_vars b);;
 
 let rec list_of_strings_to_string b = match b with
-	Nil -> ""
-	| Cons (a, left) -> a ^ " " ^ (list_of_strings_to_string left);;
+	[] -> ""
+	| a :: left -> a ^ " " ^ (list_of_strings_to_string left);;
 
 let rec substitute a b x = match a with
 	Var v -> if x = v then b else Var v
@@ -170,11 +170,11 @@ type 'a optional = Empty | Element of 'a;;
 
 let rec make_unique a prev equal = match prev with
 	Empty -> (match a with 
-		Nil -> Nil
-		| Cons (a, last) -> Cons (a, (make_unique last (Element a) equal)))
+		[] -> []
+		| a :: last -> a :: (make_unique last (Element a) equal))
 	| Element el -> match a with
-		Nil -> Nil
-		| Cons (a, last) -> if (equal a el) then (make_unique last prev equal) else Cons (a, (make_unique last (Element a) equal));;
+		[] -> []
+		| a :: last -> if (equal a el) then (make_unique last prev equal) else a :: (make_unique last (Element a) equal);;
 
 let unique a = 
 	let my_comp c d = (String.compare c d) < 0 in
@@ -182,18 +182,18 @@ let unique a =
 
 let rec get_all_dependences_rec a v = match a with
 		Var var -> 
-			if var = v then (Nil, true) else (Nil, false)
+			if var = v then ([], true) else ([], false)
 		| App (a, b) -> 
 			let lst1, val1 = (get_all_dependences_rec a v) and lst2, val2 = (get_all_dependences_rec b v) in
 				((concat lst1 lst2), (val1 || val2))
-		| Abs (var, b) -> if var = v then (Nil, false) else	
+		| Abs (var, b) -> if var = v then ([], false) else	
 			let res = get_all_dependences_rec b v in
-				if (snd res) = true then (Cons (var, (fst res)), true) else res;;
+				if (snd res) = true then (var :: (fst res), true) else res;;
 
 let get_all_dependences a v = fst (get_all_dependences_rec a v);;
 
 let rec has_same_rec a b comp = match a, b with
-	Cons (q, alast), Cons (w, blast) -> 
+	q :: alast, w :: blast -> 
 		(let res = comp q w in
 			if res == 0 then true else if res < 0 then (has_same_rec alast b comp) else (has_same_rec a blast comp))
 	| _, _ -> false;;
