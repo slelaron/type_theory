@@ -15,7 +15,7 @@ let free_vars x =
 	let rec free_vars' x was set lst = match x with
 		Var var -> if StringSet.mem var was then (set, lst) else if StringSet.mem var set then (set, lst) else (StringSet.add var set, var :: lst) 
 		| App (a, b) -> 
-			let map, lst = free_vars' a was set lst in
+			let set, lst = free_vars' a was set lst in
 				free_vars' b was set lst
 		| Abs (var, last) -> 
 			free_vars' last (StringSet.add var was) set lst in
