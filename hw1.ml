@@ -76,183 +76,63 @@ let rec merge_sort_with_comp x comp = match x with
 
 let merge_sort x = merge_sort_with_comp x (<);;
 
-let rec read_abs x iter res = match x.[iter] with
-	'.' -> (res, iter + 1)
-	| _ -> read_abs x (iter + 1) (res ^ Char.escaped x.[iter]);;
+let rec read_abs_with_buffer x iter res = match x.[iter] with
+	'.' -> (res, (iter + 1))
+	 | _ -> read_abs_with_buffer x (iter + 1) (res ^ Char.escaped x.[iter]);;
 
-let rec read_var x iter res = match x.[iter] with
-	' ' | ')' | '#' | '(' -> (res, iter)
-	| _ -> read_var x (iter + 1) (res ^ Char.escaped x.[iter]);;
+let read_abs x iter = read_abs_with_buffer x iter "";;
 
-let rec skip_all_spaces x iter = match x.[iter] with
-	' ' -> skip_all_spaces x (iter + 1)
-	| _ -> iter;; 
+let rec read_var_with_buffer x iter res = match x.[iter] with
+	' ' | '(' | ')' | '#' -> (res, iter)
+	| _ -> read_var_with_buffer x (iter + 1) (res ^ Char.escaped x.[iter]);;
 
-type something = Nothing | Lambda of lambda;;
+let rec skip_spaces x iter = match x.[iter] with
+	' ' -> skip_spaces x (iter + 1)
+	| _ -> iter;;
 
-let rec lambda_of_string_another x iter prev = match x.[iter] with
-	'\\' -> 
-		let (result, iter) = read_abs x (iter + 1) "" in
-			let iter = skip_all_spaces x iter in
-				let (toAdd, iter) = lambda_of_string_another x iter Nothing in
-					(Abs (result, toAdd), iter)
-	| '(' -> 
-		let iter = skip_all_spaces x (iter + 1) in
-			let (res, iter) = lambda_of_string_another x iter Nothing in
-				rec_or_ret x (iter + 1) res prev
-	| _ -> 
-		let (result, iter) = read_var x iter "" in
-			rec_or_ret x iter (Var result) prev
-and rec_or_ret x iter result prev =
-	let result = match prev with
-		Nothing -> result
-		| Lambda a -> App(a, result) in
-			let iter = skip_all_spaces x iter in
-				match x.[iter] with 
-					')' | '#' -> (result, iter)
-					| _ -> lambda_of_string_another x iter (Lambda result);;
+let read_var x iter = read_var_with_buffer x iter "";;
 
-let lambda_of_string x = 
-	let (result, last) = lambda_of_string_another (x ^ "#") 0 Nothing in
-		result;;
+let rec lambda_of_string_another x iter = 
+	let iter = skip_spaces x iter in match x.[iter] with
+		'\\' ->  
+			let abs_name, iter = read_abs x (iter + 1) in
+				let next_lambda, iter = lambda_of_string_another x iter in
+					(Abs (abs_name, next_lambda), iter)
+		| _ -> 
+			let rec application prev now = match prev with
+				None -> Some now
+				| Some prev -> Some (App (prev, now))
+			and loop iter prev = 
+				let iter = skip_spaces x iter in
+					match x.[iter] with
+					')' | '#' -> (match prev with
+						Some prev -> (prev, iter)
+						| None -> failwith "Empty bracket")
+					| '\\' -> let next_lambda, iter = lambda_of_string_another x iter in
+						loop iter (application prev next_lambda)
+					| '(' -> let next_lambda, iter = lambda_of_string_another x (iter + 1) in
+						loop (iter + 1) (application prev next_lambda)
+					| _ -> let var, iter = read_var x iter in
+						loop iter (application prev (Var var)) in
+			loop iter None;;
 
-let rec string_of_lambda x = match x with 
-	Var a -> a
-	| App (a, b) -> "("  ^ (string_of_lambda a) ^ " " ^ (string_of_lambda b) ^ ")"
-	| Abs (a, b) -> "\\" ^ a ^ "." ^ (string_of_lambda b);;
+let lambda_of_string x = (fst (lambda_of_string_another (x ^ "#") 0));;
+
+let rec string_of_lambda x = 
+	let rec string_of_lambda_wrapped_with_brackets x = match x with 
+		Var a -> a
+		| App (a, b) -> "("  ^ (string_of_lambda_wrapped_with_brackets a) ^ " " ^ (string_of_lambda_wrapped_with_brackets b) ^ ")"
+		| Abs (a, b) -> "(\\" ^ a ^ "." ^ (string_of_lambda b) ^ ")" in 
+	match x with
+		Var a -> a
+		| App (a, b) -> (string_of_lambda_wrapped_with_brackets a) ^ " " ^ (string_of_lambda_wrapped_with_brackets b)
+		| Abs (a, b) -> "\\" ^ a ^ "." ^ (string_of_lambda b);;
 
 let rec string_of_lambda1 x = match x with 
 	Var a -> a
 	| App (a, b) -> "App(" ^ (string_of_lambda1 a) ^ ", " ^ (string_of_lambda1 b) ^ ")"
 	| Abs (a, b) -> "Abs(" ^ a ^  ", " ^ (string_of_lambda1 b) ^ ")";;
 
-let rec filter pred lst = match lst with
-	[] -> []
-	| a :: left -> match (pred a) with
-			true -> a :: (filter pred left)
-			| _ -> filter pred left;;
-
-let rec concat a b = match a with
-	[] -> b
-	| q :: w -> q :: (concat w b);;
-
-let rec free_vars x = match x with 
-	Var a -> [a]
-	| App (a, b) -> (concat (free_vars a) (free_vars b))
-	| Abs (a, b) -> 
-		let predicate character = not (a = character) in
-				filter predicate (free_vars b);;
-
 let rec list_of_strings_to_string b = match b with
 	[] -> ""
 	| a :: left -> a ^ " " ^ (list_of_strings_to_string left);;
-
-let rec substitute a b x = match a with
-	Var v -> if x = v then b else Var v
-	| Abs (v, d) -> if x = v then Abs (v, d) else Abs (v, (substitute d b x))
-	| App (c, d) -> App ((substitute c b x), (substitute d b x));;
-
-let rec normal_beta_reduction_with_bool a = match a with
-	Var x -> (Var x, false)
-	| Abs (x, p) -> let res = normal_beta_reduction_with_bool p in
-		(Abs (x, (fst res)), (snd res))
-	| App (p, q) -> match p with
-		Abs (v, p) -> (substitute p q v, true)
-		| _ -> match (normal_beta_reduction_with_bool p) with
-			(res, true) -> (App (res, q), true)
-			| (res, false) -> 
-				let first, second = normal_beta_reduction_with_bool q in
-					(App (res, first), second);;
-
-let normal_beta_reduction a = fst (normal_beta_reduction_with_bool a);;
-
-type 'a optional = Empty | Element of 'a;;
-
-let rec make_unique a prev equal = match prev with
-	Empty -> (match a with 
-		[] -> []
-		| a :: last -> a :: (make_unique last (Element a) equal))
-	| Element el -> match a with
-		[] -> []
-		| a :: last -> if (equal a el) then (make_unique last prev equal) else a :: (make_unique last (Element a) equal);;
-
-let unique a = 
-	let my_comp c d = (String.compare c d) < 0 in
-		make_unique (merge_sort_with_comp a my_comp) Empty (=);;
-
-let rec get_all_dependences_rec a v = match a with
-		Var var -> 
-			if var = v then ([], true) else ([], false)
-		| App (a, b) -> 
-			let lst1, val1 = (get_all_dependences_rec a v) and lst2, val2 = (get_all_dependences_rec b v) in
-				((concat lst1 lst2), (val1 || val2))
-		| Abs (var, b) -> if var = v then ([], false) else	
-			let res = get_all_dependences_rec b v in
-				if (snd res) = true then (var :: (fst res), true) else res;;
-
-let get_all_dependences a v = fst (get_all_dependences_rec a v);;
-
-let rec has_same_rec a b comp = match a, b with
-	q :: alast, w :: blast -> 
-		(let res = comp q w in
-			if res == 0 then true else if res < 0 then (has_same_rec alast b comp) else (has_same_rec a blast comp))
-	| _, _ -> false;;
-
-let has_same a b =  
-	let first = unique a and second = unique b in
-		has_same_rec first second (String.compare);;
-
-let free_to_subst a b v = 
-	let my_free_vars = free_vars b and dependences = get_all_dependences a v in
-		not (has_same my_free_vars dependences);;
-
-let rec is_normal_form a = match a with
-	Var x -> true
-	| Abs (a, b) -> is_normal_form b
-	| App (a, b) -> match a with 
-		Abs (c, d) -> false
-		| _ -> (is_normal_form a) && (is_normal_form b);;
-
-let rec is_alpha_equivalent a b = match a, b with
-	Abs(e, q), Abs (c, d) -> is_alpha_equivalent (substitute q (Var c) e) d
-	| App (a, b), App (c, d) -> (is_alpha_equivalent a c) && (is_alpha_equivalent b d)
-	| Var a, Var b -> a = b
-	| _, _ -> false;;
-
-module StringMap = Map.Make(String);;
-
-let reduce_to_normal_form a = 
-	let map = ref StringMap.empty in
-		let rec func a = match a with
-			Var x -> (Var x, false)
-			| Abs (x, p) -> let res = func1 p in
-				(Abs (x, (fst res)), (snd res))
-			| App (p, q) -> match p with
-				Abs (v, p) -> (substitute p q v, true)
-				| _ -> match (func1 p) with
-					(res, true) -> (App (res, q), true)
-					| (res, false) -> 
-						let first, second = func1 q in
-							(App (res, first), second)
-		and func1 a = 
-			let lambda_name = string_of_lambda a in
-				let rec get_parent prev =
-					let a = string_of_lambda (fst prev) in 
-						if (StringMap.mem a !map) = false || a == (string_of_lambda (fst (StringMap.find a !map))) then 
-							prev
-						else 
-							let result = get_parent (StringMap.find a !map) in
-								map := StringMap.add a result !map;
-								result in
-					if (StringMap.mem lambda_name !map) = true then map := StringMap.add lambda_name (get_parent (StringMap.find lambda_name !map)) !map;
-					if (StringMap.mem lambda_name !map) = true then print_string "True\n" else print_string "False\n";
-					if (StringMap.mem lambda_name !map) = true then 
-						StringMap.find lambda_name !map
-					else
-						let result = func a in
-							map := (StringMap.add lambda_name result !map);
-							result
-		and loop now = 
-			let result, need_else = func1 now in
-				if need_else = true then loop result else result in
-		loop a;;
