@@ -1,11 +1,25 @@
 open Hw1;;
 
-let rec free_vars x = match x with 
+module IntMap = Map.Make(struct type t = int let compare = compare end);;
+module StringMap = Map.Make(String);;
+module StringSet = Set.Make(String);;
+
+(*let rec free_vars x = match x with 
 	Var a -> [a]
 	| App (a, b) -> (free_vars a) @ (free_vars b)
 	| Abs (a, b) -> 
 		let predicate character = not (a = character) in
-				List.filter predicate (free_vars b);;
+				List.filter predicate (free_vars b);;*)
+
+let free_vars x = 
+	let rec free_vars' x was set lst = match x with
+		Var var -> if StringSet.mem var was then (set, lst) else if StringSet.mem var set then (set, lst) else (StringSet.add var set, var :: lst) 
+		| App (a, b) -> 
+			let map, lst = free_vars' a was set lst in
+				free_vars' b was set lst
+		| Abs (var, last) -> 
+			free_vars' last (StringSet.add var was) set lst in
+		snd (free_vars' x StringSet.empty StringSet.empty []);;
 
 let rec substitute a b x = match a with
 	Var v -> if x = v then b else Var v
@@ -76,9 +90,6 @@ let rec is_alpha_equivalent a b = match a, b with
 	| App (a, b), App (c, d) -> (is_alpha_equivalent a c) && (is_alpha_equivalent b d)
 	| Var a, Var b -> a = b
 	| _, _ -> false;;
-
-module IntMap = Map.Make(struct type t = int let compare = compare end);;
-module StringMap = Map.Make(String);;
 
 type graph_lambda = GApp of int * int | GAbs of string * int | GVar of string;;
 
@@ -154,8 +165,21 @@ let substitute_in_node what substitution new_index v map =
 	let result, new_index, map, _, _ = substitute_in_node_internal what substitution new_index v map IntMap.empty in
 		(result, new_index, map);;
 
+let rename_vars l  = 
+	let rec rename_vars' term map new_var = 
+		match term with
+			Var var -> if StringMap.mem var map then (Var ("V" ^ (string_of_int (StringMap.find var map))), new_var) else (Var var, new_var)
+			| Abs (var, last) -> 
+				let result, new_new_var = rename_vars' last (StringMap.add var new_var map) (new_var + 1) in
+					(Abs ("V" ^ (string_of_int new_var), result), new_new_var)
+			| App (fst, snd) -> 
+				let fresult, new_var = rename_vars' fst map new_var in
+					let sresult, new_var = rename_vars' snd map new_var in
+						(App (fresult, sresult), new_var) in
+		fst (rename_vars' l StringMap.empty 0);;
+
 let reduce_to_normal_form a = 
-	let initial_index, initial_map, new_index = from_lambda_to_graph a in
+	let initial_index, initial_map, new_index = from_lambda_to_graph (rename_vars a) in
 		let rec big_loop index map new_index = 
 			match IntMap.find index map with
 				GApp (first, second) -> 

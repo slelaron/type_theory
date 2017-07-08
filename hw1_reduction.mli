@@ -20,3 +20,5 @@ val normal_beta_reduction: lambda -> lambda
    порядка редукции; реализация должна быть эффективной: использовать 
    мемоизацию *)
 val reduce_to_normal_form: lambda -> lambda
+
+val rename_vars: lambda -> lambda
