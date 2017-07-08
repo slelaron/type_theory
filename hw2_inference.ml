@@ -123,6 +123,19 @@ let get_hm_free_vars tp =
 			get_hm_free_vars' last (StringSet.add var was) answer lst in
 	snd (get_hm_free_vars' tp StringSet.empty StringSet.empty []);;
 
+let get_hm_free_vars_in_term term = 
+	let rec get_hm_free_vars_in_term' term was answer lst = match term with
+		HM_Var var -> if StringSet.mem var was then (answer, lst) else if StringSet.mem var answer then (answer, lst) else (StringSet.add var answer, var:: lst)
+		| HM_Abs (var, last) -> 
+			get_hm_free_vars_in_term' last (StringSet.add var was) answer lst
+		| HM_Let (var, fst, snd) ->
+			let (answer, lst) = get_hm_free_vars_in_term' fst was answer lst in
+				get_hm_free_vars_in_term' snd (StringSet.add var was) answer lst
+		| HM_App (fst, snd) -> 
+			let (answer, lst) = get_hm_free_vars_in_term' fst was answer lst in
+				get_hm_free_vars_in_term' snd was answer lst in
+		snd (get_hm_free_vars_in_term' term StringSet.empty StringSet.empty []);;
+
 let add_quantifiers tp context = 
 	let free_in_context = 
 		List.fold_left 
@@ -173,6 +186,9 @@ let algorithm_w x =
 										match sresult with
 											None -> None 
 											| Some (ssub, stype, new_var) -> Some (sub_composition ssub fsub, stype, new_var) in
-		let (map, new_var) = List.fold_left (fun (prev, next) now -> (StringMap.add now (HM_Elem ("V" ^ string_of_int next)) prev, next + 1)) (StringMap.empty, 0) (get_hm_free_vars x) in
-			let (sub, tp, _) = algorithm_w' x map new_var in
-				(sub, tp);;
+		let (map, new_var) = List.fold_left (fun (prev, next) now -> (StringMap.add now (HM_Elem ("V" ^ string_of_int next)) prev, next + 1)) (StringMap.empty, 0) (get_hm_free_vars_in_term x) in
+			let result = algorithm_w' x map new_var in
+				match result with
+					None -> None 
+					| Some (sub, tp, _) -> Some (StringMap.bindings sub, tp)
+				
