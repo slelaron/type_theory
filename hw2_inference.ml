@@ -80,8 +80,8 @@ let check_infer_simple_type l =
 				"Type of lambda: " ^ (string_of_simple_type solved_type) ^ "\n" ^
 				"Free variables: \n" ^ (String.concat "\n" (List.map (fun (name, tp) -> name ^ ": " ^ (string_of_simple_type tp)) solution));;
 
-print_string ((check_infer_simple_type (lambda_of_string "\\a.\\b.\\c.\\d.a (b (c d))")) ^ "\n");;
-print_string ((check_infer_simple_type (lambda_of_string "\\s.\\t.s (t (\\p.\\q.q)(\\r.\\s.r))t")) ^ "\n");;
+(*print_string ((check_infer_simple_type (lambda_of_string "\\a.\\b.\\c.\\d.a (b (c d))")) ^ "\n");;
+print_string ((check_infer_simple_type (lambda_of_string "\\f.\\x.f (f x)")) ^ "\n");;*)
 
 type hm_lambda = HM_Var of string | HM_Abs of string * hm_lambda | HM_App of hm_lambda * hm_lambda | HM_Let of string * hm_lambda * hm_lambda
 type hm_type = HM_Elem of string | HM_Arrow of hm_type * hm_type | HM_ForAll of string * hm_type
@@ -105,7 +105,7 @@ let apply_substitution_to_hm_type map tp =
 		hm_type_of_algebraic_term (apply_substitution_with_map new_map (algebraic_term_of_hm_type tp));;
 
 let sub_composition sub1 sub2 = 
-	StringMap.fold (fun key value prev -> StringMap.add key value prev) sub2 (StringMap.map (fun x -> apply_substitution_to_hm_type sub2 x) sub1);;
+	StringMap.fold (fun key value prev -> StringMap.add key value prev) sub1 (StringMap.map (fun x -> apply_substitution_to_hm_type sub1 x) sub2);;
 
 let rec substitute_in_hm_type x map new_var = match x with
 	HM_ForAll (var, last) -> substitute_in_hm_type last (StringMap.add var (HM_Elem ("V" ^ (string_of_int new_var))) map) (new_var + 1)
@@ -142,9 +142,15 @@ let add_quantifiers tp context =
 			(fun prev now -> StringSet.add now prev)
 			StringSet.empty 
 			(List.concat (List.map get_hm_free_vars (snd (List.split (StringMap.bindings context))))) in
+		(*print_string ("Free_in_context " ^ (String.concat " " (List.concat (List.map get_hm_free_vars (snd (List.split (StringMap.bindings context)))))));*)
 		let free_vars = get_hm_free_vars tp in
 			let good_list = List.filter (fun x -> not (StringSet.mem x free_in_context)) free_vars in
 				List.fold_left (fun prev now -> HM_ForAll (now, prev)) tp good_list;;
+
+let rec string_of_hm_type tp = match tp with	
+	HM_Elem elem -> elem 
+	| HM_Arrow (fst, snd) -> "(" ^ (string_of_hm_type fst) ^ "->" ^ (string_of_hm_type snd) ^ ")"
+	| HM_ForAll (var, last) -> "@" ^ var ^ "." ^ (string_of_hm_type last);;
 
 let algorithm_w x = 
 	let rec algorithm_w' term context new_var =
@@ -181,7 +187,7 @@ let algorithm_w x =
 						None -> None 
 						| Some (fsub, ftype, new_var) -> 
 							let fcontext = substitute_in_context (StringMap.remove var context) fsub in
-								let scontext = StringMap.add var (add_quantifiers ftype (substitute_in_context fsub context)) fcontext in
+								let scontext = StringMap.add var (add_quantifiers ftype (substitute_in_context context fsub)) fcontext in
 									let sresult = algorithm_w' snd scontext new_var in
 										match sresult with
 											None -> None 
@@ -190,5 +196,44 @@ let algorithm_w x =
 			let result = algorithm_w' x map new_var in
 				match result with
 					None -> None 
-					| Some (sub, tp, _) -> Some (StringMap.bindings sub, tp)
-				
+					| Some (sub, tp, _) -> Some (StringMap.bindings (substitute_in_context map sub), tp);;
+
+let check_algorithm_w l = 
+	let result = algorithm_w l in
+		match result with
+			None -> "Bad lambda"
+			| Some (solution, solved_type) -> 
+				"Type of lambda: " ^ (string_of_hm_type solved_type) ^ "\n" ^
+				"Free variables: \n" ^ (String.concat "\n" (List.map (fun (name, tp) -> name ^ ": " ^ (string_of_hm_type tp)) solution));;
+
+let rec hm_lambda_of_lambda l = match l with
+	Hw1.Var a -> HM_Var a
+	| App (a, b) -> HM_App (hm_lambda_of_lambda a, hm_lambda_of_lambda b)
+	| Abs (var, last) -> HM_Abs (var, hm_lambda_of_lambda last);;
+
+
+let t = HM_Var "t";;
+let f = HM_Var "f";;
+let id = HM_Var "id";;
+let x = HM_Var "x";;
+let y = HM_Var "y";;
+let z = HM_Var "z";;
+let dd = HM_Var "dd";;
+let num2 = HM_Abs("f", HM_Abs ("x", HM_App (f, HM_App (f, x))));;
+let t1t = HM_Let ("id", HM_Abs("x", x), HM_Abs("f", HM_Abs("x", HM_App(id, HM_App(id, HM_App(id, x))))));;
+let t4t = HM_Let ("id", HM_Abs("t", t), HM_Abs("f", HM_Abs("x", HM_App(HM_App(id, f), HM_App(id, x)))));;
+let t5t = HM_Let ("id", HM_Abs("t", t), HM_Abs("f", HM_Abs("x", HM_App(HM_App(id, f), HM_App (HM_App(id, f), HM_App(id, x))))));;
+let t6t = HM_Let ("dd", HM_Abs("f", HM_Abs ("x", HM_App (f, HM_App (f, x)))), HM_App (dd, HM_App (dd, HM_App (dd, HM_App (dd, HM_App (dd, dd))))));;
+
+let t7t = Abs("f", Abs ("x", App (Var "f", App (Var "f", Var "x"))));;
+
+let t8t = HM_Let ("a", num2, HM_Let ("b", num2, HM_Let ("c", num2, HM_App (HM_Var "a", HM_App (HM_Var "b", HM_Var "c")))));;
+
+let num1 = HM_Abs("f", HM_Abs ("x", HM_App (f, x)));;
+(*print_string ((check_algorithm_w t6t) ^ "\n\n");;
+print_string ((check_infer_simple_type (App (Var "f", App (Var "f", Var "x")))) ^ "\n\n");;
+print_string ((check_algorithm_w t5t) ^ "\n\n");;
+print_string ((check_algorithm_w t8t) ^ "\n\n");;
+print_string ((check_algorithm_w (HM_Abs ("f", HM_Abs ("x", HM_Let ("dd", HM_Abs ("z", HM_App (f, HM_App (f, z))), HM_App (dd, HM_App (dd, HM_App (dd, x)))))))) ^ "\n\n");;*)
+
+(*print_string ((check_algorithm_w (hm_lambda_of_lambda (lambda_of_string "\\f.\\x.f (f (f x))"))) ^ "\n");;*)

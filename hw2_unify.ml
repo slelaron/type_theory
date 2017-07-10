@@ -30,7 +30,7 @@ let rec string_of_term term = match term with
 	| Var var -> var;;
 
 let string_of_system lst = 
-	(String.concat "\n" (List.map (fun (a, b) -> (string_of_term a) ^ " = " ^ (string_of_term b)) lst));;
+	((String.concat "\n" (List.map (fun (a, b) -> (string_of_term a) ^ " = " ^ (string_of_term b)) lst)) ^ "\n");;
 
 let system_to_equation x = failwith "Not implemented";;
 
@@ -193,5 +193,5 @@ let find_solution lst =
 						(fun (fst, snd) -> fst ^ " = " ^ (string_of_term snd))
 						solution)) ^ "\n" ^ (if check_solution solution lst = true then "Correct\n" else "Incorrect\n");;
 
-print_string ((string_of_system solvable3) ^ "\n");;
-print_string ((find_solution solvable3) ^ "\n");; 
+(*print_string ((string_of_system solvable3) ^ "\n");;
+print_string ((find_solution solvable3) ^ "\n");; *)
